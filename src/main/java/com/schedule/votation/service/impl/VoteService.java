@@ -7,6 +7,7 @@ import com.schedule.votation.entity.Schedule;
 import com.schedule.votation.entity.Vote;
 import com.schedule.votation.mapper.VoteMapper;
 import com.schedule.votation.repository.ScheduleRepository;
+import com.schedule.votation.repository.UserRepository;
 import com.schedule.votation.repository.VoteRepository;
 import com.schedule.votation.service.VoteInterface;
 import org.springframework.stereotype.Service;
@@ -21,11 +22,14 @@ public class VoteService implements VoteInterface {
 
     private final VoteRepository voteRepository;
     private final ScheduleRepository scheduleRepository;
+
+    private final UserRepository userRepository;
     private final VoteMapper voteMapper;
 
-    public VoteService(VoteRepository voteRepository, ScheduleRepository scheduleRepository, VoteMapper voteMapper) {
+    public VoteService(VoteRepository voteRepository, ScheduleRepository scheduleRepository, UserRepository userRepository, VoteMapper voteMapper) {
         this.voteRepository = voteRepository;
         this.scheduleRepository = scheduleRepository;
+        this.userRepository = userRepository;
         this.voteMapper = voteMapper;
     }
 
@@ -39,8 +43,21 @@ public class VoteService implements VoteInterface {
 
     @Override
     public OutVoteDto createVote(InVoteDto inVoteDto) {
+        Date date = new Date();
         Vote vote = voteMapper.inVoteDtoToVote(inVoteDto);
-        return voteMapper.outVoteDtoToVote(voteRepository.save(vote));
+        Optional<Schedule> schedule = scheduleRepository.findById(inVoteDto.getIdSchedule());
+        if (scheduleRepository.existsById(inVoteDto.getIdSchedule())
+                && userRepository.existsById(inVoteDto.getIdUser())) {
+            Vote votes = voteRepository.findByIdUserAndIdSchedule(vote.getIdUser(), vote.getIdSchedule());
+            if (votes == null) {
+                if (date.before(schedule.get().getDeadline())) {
+                    return voteMapper.outVoteDtoToVote(voteRepository.save(vote));
+                }
+                throw new RuntimeException("Schedule is closed!");
+            }
+            throw new RuntimeException(("You can't vote again"));
+        }
+        throw new RuntimeException(("The schedule does not exist in the database!"));
     }
 
     @Override
